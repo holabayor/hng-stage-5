@@ -37,7 +37,9 @@ router.get('/videos', (req, res) => {
       // Filter out only video files (e.g., .mp4, .webm)
       const videoFiles = files.filter((file) => {
         const fileExtension = path.extname(file).toLowerCase();
-        return ['.mp4', '.webm'].includes(fileExtension);
+        return ['.mp4', '.mkv', '.3gp', '.webm', 'avi', 'mpeg'].includes(
+          fileExtension
+        );
       });
 
       // Send the list of video files in the response
@@ -61,13 +63,16 @@ router.post('/upload', upload.single('video'), (req, res) => {
       });
     }
 
-    const fileStream = fs.createReadStream(req.file.path);
-    res.setHeader('Content-Type', req.file.mimetype);
-    fileStream.pipe(res);
-    // res.json({
-    //   message: 'Video uploaded successfully',
-    //   url: req.file.path,
-    // });
+    // const fileStream = fs.createReadStream(req.file.path);
+    // res.setHeader('Content-Type', req.file.mimetype);
+    // fileStream.pipe(res);
+    console.log(req.file);
+    res.json({
+      message: 'Video uploaded successfully',
+      url: req.file.path,
+      filename: req.file.filename,
+      size: req.file.size,
+    });
   } catch (err) {
     console.error(err);
     return res.status(500).json({
