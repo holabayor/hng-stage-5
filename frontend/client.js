@@ -3,27 +3,29 @@ document.addEventListener('DOMContentLoaded', () => {
   const stopRecordingBtn = document.getElementById('stopRecording');
 
   let mediaRecorder;
-  let videoId; // Store the UUID received from the server
+  let videoId; // Store the video ID returned by the server
   let chunkInterval; // Interval to send chunks
 
   startRecordingBtn.addEventListener('click', async () => {
     console.log('Start button clicked');
 
-    // Send a start signal to the server
-    console.log('Sending start signal to the server');
-    const startResponse = await fetch('http://localhost:3000/start-recording', {
-      method: 'POST',
-    });
+    // Send a start signal to the backend server
+    console.log('Sending start signal to the backend server');
+    const startResponse = await fetch(
+      'http://localhost:8000/api/start-recording',
+      {
+        method: 'POST',
+      }
+    );
 
-    // Check if the response contains a UUID
-    if (startResponse.ok) {
-      const responseJson = await startResponse.json();
-      videoId = responseJson.videoId; // Store the UUID
-      console.log(`Received UUID from server: ${videoId}`);
-    } else {
-      console.error('Failed to receive UUID from server');
+    // Check if the response is successful
+    if (!startResponse.ok) {
+      console.error('Failed to start video recording');
       return;
     }
+
+    // Get the video ID from the response
+    videoId = await startResponse.json().then((response) => response.videoId);
 
     // Create a MediaStream for screen recording (you might need to implement this part)
     console.log('Accessing screen recording');
@@ -37,41 +39,45 @@ document.addEventListener('DOMContentLoaded', () => {
     mediaRecorder = new MediaRecorder(screenStream);
 
     // Event handler for dataavailable
-    mediaRecorder.ondataavailable = (event) => {
+    mediaRecorder.ondataavailable = async (event) => {
       if (event.data.size > 0) {
-        console.log('Data available. Sending chunk to the server...');
+        console.log(
+          'Data available. Sending chunk to the backend server...',
+          event.data
+        );
 
         const formData = new FormData();
         formData.append(
           'videoChunk',
           event.data,
-          `screen_chunk_${Date.now()}.webm`
+          `video_chunk_${videoId}_${Date.now()}.webm`
         );
 
-        // Append the UUID to the FormData
-        formData.append('videoId', videoId);
-
-        // Use Fetch API to send the chunk immediately to the server
-        fetch('http://localhost:3000/upload-chunk', {
+        // Send the chunk to the backend server using the POST method
+        upload_res = await fetch('http://localhost:8000/api/upload-chunk', {
           method: 'POST',
           body: formData,
         });
 
-        console.log('Chunk sent to the server');
+        console.log('Chunk sent to the backend server', upload_res);
       }
     };
 
     // Start recording
     console.log('Starting screen recording');
-    mediaRecorder.start(50000); // Record for 50 seconds
+    mediaRecorder.start();
 
     startRecordingBtn.disabled = true;
     stopRecordingBtn.disabled = false;
 
     // Set an interval to send chunks every 30 seconds
     chunkInterval = setInterval(() => {
+      if (mediaRecorder.state !== 'recording') {
+        clearInterval(chunkInterval);
+        return;
+      }
       mediaRecorder.requestData(); // Trigger dataavailable event
-    }, 30000); // Send a chunk every 30 seconds
+    }, 5000); // Send a chunk every 30 seconds
   });
 
   stopRecordingBtn.addEventListener('click', async () => {
@@ -80,20 +86,23 @@ document.addEventListener('DOMContentLoaded', () => {
     if (mediaRecorder && mediaRecorder.state === 'recording') {
       mediaRecorder.stop();
 
-      // Send a stop signal to the server
-      console.log('Sending stop signal to the server');
-      const stopResponse = await fetch('http://localhost:3000/stop-recording', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json', // Set the content type to JSON
-        },
-        body: JSON.stringify({ videoId }), // Send the UUID in the request body
-      });
+      // Send a stop signal to the backend server
+      console.log('Sending stop signal to the backend server');
+      const stopResponse = await fetch(
+        'http://localhost:8000/api/stop-recording',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json', // Set the content type to JSON
+          },
+          body: JSON.stringify({ videoId }), // Send the video ID in the request body
+        }
+      );
 
-      if (stopResponse.ok) {
-        console.log('Screen recording stopped');
-      } else {
-        console.error('Failed to stop screen recording');
+      // Check if the response is successful
+      if (!stopResponse.ok) {
+        console.error('Failed to stop video recording');
+        return;
       }
 
       startRecordingBtn.disabled = false;
