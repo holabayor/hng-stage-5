@@ -1,52 +1,129 @@
 const fs = require('fs');
-const upload = require('../utils');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid'); // Import the uuid library
+const transcribeVideo = require('../utils/transcribe');
 
-class UploadController {
-  static async uploadChunk(req, res) {
-    const videoId = req.body.uuid;
-    // console.log(`Chunk received for UUID: ${videoId}`);
+let videoId;
+let uploadedChunks = [];
 
-    if (!recordings.has(videoId)) {
-      return res.status(400).json({ error: 'Invalid UUID' });
-    }
+const startVideo = async (req, res) => {
+  try {
+    videoId = uuidv4(); // Generate a new video ID
 
+    res.status(200).json({ message: 'Recording starts', videoId: videoId });
+  } catch (error) {
+    res.status(400).json({ success: false, message: error.message });
+  }
+};
+
+const uploadChunk = async (req, res) => {
+  try {
     const chunk = req.file.buffer;
-    recordings.get(videoId).push(chunk);
+    // console.log('The uploaded chunk is', chunk);
+    await uploadedChunks.push(chunk);
+
+    // console('The uploaded chunks is of length', uploadedChunks.length);
 
     res.status(200).send('Chunk received');
+  } catch (error) {
+    res.status(400).json({
+      success: false,
+      message: 'Invalid file',
+    });
   }
+};
 
-  static async uploadVideo(req, res) {
-    try {
-      // req.files contains the uploaded chunks as buffers.
-      const uploadedChunks = req.files;
-
-      // Implement logic to store or process these chunks.
-      // You may save them to a temporary directory, a database, or memory.
-
-      // Example: Save the chunks to a temporary directory.
-      const fs = require('fs');
-      const path = require('path');
-      const tempDir = path.join(__dirname, 'temp_chunks');
-
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir);
-      }
-
-      uploadedChunks.forEach((chunk, index) => {
-        const chunkFileName = `chunk${index}.webm`;
-        const chunkFilePath = path.join(tempDir, chunkFileName);
-        fs.writeFileSync(chunkFilePath, chunk.buffer);
+const stopVideo = async (req, res) => {
+  try {
+    videoId = req.body.videoId;
+    if (uploadedChunks.length === 0 || !videoId) {
+      return res.status(400).json({
+        success: false,
+        message: 'No chunks received or video not started',
       });
-
-      // Send a success response.
-      res.status(200).json({ message: 'Video chunks uploaded successfully.' });
-    } catch (error) {
-      console.error('Error during chunk upload:', error);
-      res.status(500).json({ error: 'Internal server error' });
     }
-  }
-}
 
-module.exports = { uploadChunk: UploadController.uploadChunk };
+    const allChunks = Buffer.concat(uploadedChunks);
+
+    const uploadDir = path.join(__dirname, '../uploads');
+
+    // Create the directory if it doesn't exist
+    if (!fs.existsSync(uploadDir)) {
+      fs.mkdirSync(uploadDir, { recursive: true });
+    }
+
+    const videoPath = path.join(uploadDir, `${videoId}.webm`);
+    await fs.promises.writeFile(videoPath, allChunks);
+
+    const transcription = await transcribeVideo(videoPath);
+    const subtitlePath = path.join(uploadDir, `${videoId}.srt`);
+    await fs.promises.writeFile(subtitlePath, transcription);
+
+    // Return the transcription result along with the path to the subtitle file
+    res.status(200).json({
+      success: true,
+      videoId: videoId,
+      videopath: videoPath,
+      transcription: transcription,
+      subtitlePath: subtitlePath,
+    });
+  } catch (error) {
+    console.log('The error is', error);
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+};
+
+const getVideo = async (req, res) => {
+  try {
+    const videoId = req.params.id;
+    if (!videoId) {
+      return res.status(404).json({
+        success: false,
+        message: 'Video not found',
+      });
+    }
+
+    const videoPath = path.join(__dirname, '../uploads', `${videoId}.webm`);
+    const videoSize = fs.statSync(videoPath).size;
+
+    const headers = {
+      'Content-Length': videoSize,
+      'Content-Type': 'video/webm',
+    };
+
+    const videoStream = fs.createReadStream(videoPath);
+
+    // Read the transcription and SRT data from files (assuming you have these files)
+    const srtPath = path.join(__dirname, '../uploads', `${videoId}.srt`);
+
+    const srtData = fs.readFileSync(srtPath, 'utf-8');
+
+    // Combine video details, transcription, and SRT data into a single response object
+    const videoDetails = {
+      videoSize: videoSize,
+      srtData: srtData,
+    };
+
+    res.writeHead(200, headers);
+
+    videoStream.pipe(res);
+
+    // Send video details as JSON once the video stream is finished
+    videoStream.on('end', () => {
+      res.json({
+        success: true,
+        videoDetails: videoDetails,
+      });
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error',
+    });
+  }
+};
+
+module.exports = { startVideo, uploadChunk, stopVideo, getVideo };
