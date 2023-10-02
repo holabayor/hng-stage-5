@@ -96,28 +96,9 @@ const getVideo = async (req, res) => {
 
     const videoStream = fs.createReadStream(videoPath);
 
-    // Read the transcription and SRT data from files (assuming you have these files)
-    const srtPath = path.join(__dirname, '../uploads', `${videoId}.srt`);
-
-    const srtData = fs.readFileSync(srtPath, 'utf-8');
-
-    // Combine video details, transcription, and SRT data into a single response object
-    const videoDetails = {
-      videoSize: videoSize,
-      srtData: srtData,
-    };
-
-    res.writeHead(200, headers);
-
     videoStream.pipe(res);
 
     // Send video details as JSON once the video stream is finished
-    videoStream.on('end', () => {
-      res.json({
-        success: true,
-        videoDetails: videoDetails,
-      });
-    });
   } catch (error) {
     res.status(500).json({
       success: false,
