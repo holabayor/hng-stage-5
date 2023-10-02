@@ -86,13 +86,13 @@ These instructions will help you set up and use the API locally or on a server.
 
 ## Usage
 
-1. Start a new recording by making a POST request to /start-recording. You will receive a videoId in the response.
+1. Start a new recording by making a POST request to `/start-recording`. You will receive a `videoId` in the response.
 
-2. Upload video chunks using POST requests to /upload-chunk. Use the videoChunk field in a multipart/form-data form for each chunk.
+2. Upload video chunks using POST requests to `/upload-chunk`. Use the videoChunk field in a multipart/form-data form for each chunk.
 
-3. When recording is complete, stop the recording by making a POST request to /stop-recording. Include the videoId in the request body. The video will be transcribed, and details will be returned.
+3. When recording is complete, stop the recording by making a POST request to `/stop-recording`. Include the `videoId` in the request body. The video will be transcribed, and details will be returned.
 
-4. Retrieve video details, including transcription and subtitle data, by making a GET request to /videos/:id, where :id is the videoId obtained in step 1.
+4. Retrieve video details, including transcription and subtitle data, by making a GET request to `/videos/:id`, where `:id` is the `videoId` obtained in step 1.
 
 ## Author
 
